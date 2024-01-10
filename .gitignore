@@ -1,0 +1,9 @@
+address.log
+receipts.json
+node_modules
+.idea
+.env
+bin
+pdf/*.pdf
+cache/*.json
+.DS_Store
