@@ -4,7 +4,7 @@ const { generateGqlQueries } = require('../apollo-server-client')
 const BILLING_INTEGRATION_ORGANIZATION_CONTEXT_FIELDS = `{ id integration { id name } organization { name tin } settings state status lastReport }`
 const BillingContext = generateGqlQueries('BillingIntegrationOrganizationContext', BILLING_INTEGRATION_ORGANIZATION_CONTEXT_FIELDS)
 
-const BILLING_RECEIPT_FIELDS = '{ id importId v }'
+const BILLING_RECEIPT_FIELDS = '{ id importId v updatedAt }'
 
 const BillingReceipt = generateGqlQueries('BillingReceipt', BILLING_RECEIPT_FIELDS)
 

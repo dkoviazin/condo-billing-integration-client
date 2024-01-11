@@ -13,6 +13,7 @@ const {
     LOG_CONDO_ERROR_RECEIPTS_COUNT_MESSAGE,
     LOG_CONDO_UNTOUCHED_RECEIPTS_COUNT_MESSAGE,
 } = require('../constants')
+const dayjs = require('dayjs')
 
 const {
     BillingReceiptFile: FileGql,
@@ -171,13 +172,13 @@ class CondoBilling extends ApolloServerClient {
             ...category ? { category } : {},
             year: Number(year), month: Number(month),
             toPay: this.toMoney(toPay),
-            toPayDetails: this.setTypesToToPayDetails(toPayDetails),
-            services: services.map(({ id, name, toPay, toPayDetails }) => ({
+            ...toPayDetails ? { toPayDetails: this.setTypesToToPayDetails(toPayDetails) } : {},
+            ...services && services.length ? { services: services.map(({ id, name, toPay, toPayDetails }) => ({
                 id: String(id),
                 name: name || '-',
                 toPay: this.toMoney(toPay),
                 toPayDetails: this.setTypesToToPayDetails(toPayDetails),
-            }))
+            })) } : {}
         }
     }
     async saveReceipts (contextId, receipts = [], period) {
@@ -189,11 +190,6 @@ class CondoBilling extends ApolloServerClient {
             [LOG_CONDO_ERROR_RECEIPTS_COUNT_MESSAGE]: 0,
             [LOG_CONDO_UNTOUCHED_RECEIPTS_COUNT_MESSAGE]: 0,
         }
-        const currentVersions = await this.loadByChunks({
-            modelGql: BillingReceiptGql,
-            where: { context: { id: contextId }, period },
-        })
-        const currentVersionIndex = Object.fromEntries(currentVersions.map(({ importId, v }) => ([importId, v])))
         for (const chunk of chunks) {
            try {
                 const { data: { result: chunkResult }} = await this.client.mutate({
@@ -209,12 +205,17 @@ class CondoBilling extends ApolloServerClient {
                 chunkResult.forEach(idOrError => {
                     if (!get(idOrError, 'id')) {
                         result[LOG_CONDO_ERROR_RECEIPTS_COUNT_MESSAGE]++
-                    } else if (idOrError.v === 1 && !currentVersionIndex[idOrError.importId]) {
-                        result[LOG_CONDO_CREATED_RECEIPTS_COUNT_MESSAGE]++
-                    } else if (idOrError.v !== currentVersionIndex[idOrError.importId]) {
-                        result[LOG_CONDO_UPDATED_RECEIPTS_COUNT_MESSAGE]++
                     } else {
-                        result[LOG_CONDO_UNTOUCHED_RECEIPTS_COUNT_MESSAGE]++
+                        const isUpdatedToday = dayjs(get(idOrError, 'updatedAt')).format('YYYY-MM-DD') === dayjs().format('YYYY-MM-DD')
+                        if (isUpdatedToday) {
+                            if (idOrError.v === 1) {
+                                result[LOG_CONDO_CREATED_RECEIPTS_COUNT_MESSAGE]++
+                            } else {
+                                result[LOG_CONDO_UPDATED_RECEIPTS_COUNT_MESSAGE]++
+                            }
+                        } else {
+                            result[LOG_CONDO_UNTOUCHED_RECEIPTS_COUNT_MESSAGE]++
+                        }
                     }
                 })
             } catch (err) {

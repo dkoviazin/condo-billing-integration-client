@@ -2,7 +2,6 @@ const cliProgress = require('cli-progress')
 const dayjs = require('dayjs')
 const { Logger } = require('./integration/notify')
 const { chunk } = require('lodash')
-const { extractTextFromPDFStream } = require('./pdf')
 
 const {
     LOG_RECEIPTS_LOADED_MESSAGE,
@@ -144,5 +143,4 @@ class Integration {
 module.exports = {
     Sync,
     Integration,
-    extractTextFromPDFStream,
 }
