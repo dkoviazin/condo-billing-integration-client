@@ -177,7 +177,7 @@ class CondoBilling extends ApolloServerClient {
                 id: String(id),
                 name: name || '-',
                 toPay: this.toMoney(toPay),
-                toPayDetails: this.setTypesToToPayDetails(toPayDetails),
+                ...toPayDetails ? { toPayDetails: this.setTypesToToPayDetails(toPayDetails) } : {},
             })) } : {}
         }
     }
