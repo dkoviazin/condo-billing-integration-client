@@ -162,7 +162,7 @@ class CondoBilling extends ApolloServerClient {
     setTypesToReceipt (receipt) {
         const { importId, accountNumber, accountMeta, address, addressMeta, tin, bankAccount, routingNumber, raw, year, month, services, toPay, toPayDetails, category } = receipt
         return {
-            importId: String(importId),
+            ...importId ? { importId: String(importId) } : {},
             accountNumber: String(accountNumber),
             accountMeta,
             address,
