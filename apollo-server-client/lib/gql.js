@@ -30,7 +30,6 @@ const SIGNOUT_MUTATION = gql`
     }
 `
 
-
 module.exports = {
     SIGNIN_BY_EMAIL_MUTATION,
     SIGNIN_BY_PHONE_AND_PASSWORD_MUTATION,
