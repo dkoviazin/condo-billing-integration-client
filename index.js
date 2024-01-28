@@ -113,30 +113,77 @@ class Sync {
             this.period = dayjs(this.period, 'YYYY-MM-DD').add(-1, 'month').format('YYYY-MM-01')
             await this.sync()
         }
+        await this.condo.signOut()
     }
 
 }
 
+const NOT_IMPLEMENTED_ERROR = 'Not implemented'
+
 class Integration {
-    async getAllReceipts () {
-        throw new Error('You need to implement method to get receipts from integration')
+
+    /**
+     * Retrieves all receipts from the integration.
+     *
+     * @async
+     * @param {Object} { tin: String, period: String }
+     * @returns {Promise<{ receipts: Array<Object> }>} An object containing an array of receipt objects.
+     * @throws {Error} Throws an error if the method is not implemented.
+     * @abstract
+     */
+    async getAllReceipts ({ tin, period }) {
+        throw new Error(NOT_IMPLEMENTED_ERROR)
     }
 
+    /**
+     * Sets condo settings for the integration.
+     *
+     * @param {Object} options - The options object.
+     * @param {Object} options.settings - The condo settings object.
+     * @param {Array<Object>} options.recipients - An array of recipient objects.
+     * @returns {void}
+     */
     setCondoSettings ({ settings, recipients }) {
         this.contextSettings = settings
         this.recipients = recipients
     }
 
+    /**
+     * Checks if a receipt has a PDF file.
+     *
+     * @param {Object} receipt - The receipt object.
+     * @returns {boolean} Returns true if the receipt has a PDF file, otherwise false.
+     * @throws {Error} Throws an error if the method is not overridden.
+     * @abstract
+     */
     hasPDFFile (receipt) {
-        throw new Error('If you have no PDF files - override this method to return false')
+        throw new Error(NOT_IMPLEMENTED_ERROR)
     }
 
-    async getPublicFilePDFStream (integrationReceipt) {
-        throw new Error('If you do not have public version you need to set accountMeta -> fullName to auto-clear personal data from PDF and override this method to return null')
+    /**
+     * Retrieves the public file PDF stream for a given integration receipt.
+     *
+     * @async
+     * @param {Object} receipt - The integration receipt object.
+     * @returns {Promise<Stream|null>} A stream representing the public file PDF.
+     * @throws {Error} Throws an error if the method is not overridden or if no public version is available.
+     * @abstract
+     */
+    async getPublicFilePDFStream (receipt) {
+        throw new Error(NOT_IMPLEMENTED_ERROR)
     }
 
-    async getSensitiveDataStream (integrationReceipt) {
-        throw new Error('If you have no PDF files - override this method to return null')
+    /**
+     * Retrieves the sensitive data stream for a given integration receipt.
+     *
+     * @async
+     * @param {Object} receipt - The integration receipt object.
+     * @returns {Promise<Stream|null>} A stream representing the sensitive data, or null if no sensitive data is available.
+     * @throws {Error} Throws an error if the method is not overridden.
+     * @abstract
+     */
+    async getSensitiveDataStream (receipt) {
+        throw new Error(NOT_IMPLEMENTED_ERROR)
     }
 }
 
