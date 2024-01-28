@@ -182,7 +182,7 @@ class Integration {
      * @throws {Error} Throws an error if the method is not overridden.
      * @abstract
      */
-    async getSensitiveDataStream (receipt) {
+    async getSensitiveFilePDFStream (receipt) {
         throw new Error(NOT_IMPLEMENTED_ERROR)
     }
 }
