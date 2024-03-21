@@ -6,6 +6,7 @@ const jschardet = require('jschardet')
 const MemoryStream = require('memory-streams')
 
 const extractText = require('./lib/text-extraction')
+const { PDFDocument } = require('pdf-lib')
 
 /**
  * Converts a Buffer content to a Readable Stream.
@@ -45,11 +46,27 @@ const bufferToOctal = (buffer) => {
 }
 
 
+const convertPDF = async (bytes) => {
+    const pdfDoc = await PDFDocument.create()
+    const originalPDF = await PDFDocument.load(bytes)
+    const [firstPage] = await pdfDoc.copyPages(originalPDF, [0])
+    pdfDoc.addPage(firstPage)
+    return await pdfDoc.save()
+}
+
+
 class PdfEditor {
 
     constructor (buffer, texts = []) {
-        this.buffer = buffer
+        this.originalBuffer = buffer
+        this.buffer = null
         this.texts = texts
+    }
+
+    async init () {
+        if (!this.buffer) {
+            this.buffer = await convertPDF(this.originalBuffer)
+        }
     }
 
     async process () {
@@ -72,10 +89,13 @@ class PdfEditor {
             !isNaN(Number(chunk)) ? Number(chunk).toFixed(2) : chunk.toString()).join('')
         const hexString = `<${Buffer.from(bytes).toString('hex')}>`
         console.log('Clear data', text)
+        console.log('Clear data', octalString)
+        console.log('Clear data', hexString)
+        console.log('FOUND:', node)
         return streamContent
+            .split(hexString).join('')
             .split(text).join('')
             .split(octalString).join('')
-            .split(hexString).join('')
     }
 
     async removeTextsAndImages () {
@@ -112,6 +132,7 @@ class PdfEditor {
             objectsContext.endIndirectObject()
             try {
                 const images = Object.keys(pageJSObject.Resources.toJSObject().XObject.toJSObject())
+                console.log('images', images)
                 for (const image of images) {
                     const imageId = pageJSObject.Resources.toJSObject().XObject.toJSObject()[image].getObjectID()
                     objectsContext.startModifiedIndirectObject(imageId)
@@ -120,7 +141,7 @@ class PdfEditor {
                     objectsContext.endIndirectObject()
                 }
             } catch (err) {
-                console.log('Skipp image remove')
+                console.log('Skipp image remove', pageJSObject.Resources.toJSObject())
             }
         }
         modPdfWriter.end()
@@ -129,19 +150,21 @@ class PdfEditor {
 
 }
 
-const clearSensitiveData = async (buffer, originalName, texts) => {
-    const editor = new PdfEditor(buffer, originalName, texts)
+const clearSensitiveData = async (buffer, texts) => {
+    const editor = new PdfEditor(buffer, texts)
+    await editor.init()
     return await editor.process()
 }
 
-const extractTextFromPDFStream = async (buffer) => {
+const extractTextFromPDFBuffer = async (buffer) => {
     const editor = new PdfEditor(buffer)
+    await editor.init()
     return editor.extractText()
 }
 
 module.exports = {
     clearSensitiveData,
-    extractTextFromPDFStream,
+    extractTextFromPDFBuffer,
     stream2buffer,
     bufferToStream,
 }
