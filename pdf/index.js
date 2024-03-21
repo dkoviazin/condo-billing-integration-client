@@ -88,10 +88,6 @@ class PdfEditor {
             `(${bufferToOctal(chunk.asBytes)})` :
             !isNaN(Number(chunk)) ? Number(chunk).toFixed(2) : chunk.toString()).join('')
         const hexString = `<${Buffer.from(bytes).toString('hex')}>`
-        console.log('Clear data', text)
-        console.log('Clear data', octalString)
-        console.log('Clear data', hexString)
-        console.log('FOUND:', node)
         return streamContent
             .split(hexString).join('')
             .split(text).join('')
@@ -132,7 +128,6 @@ class PdfEditor {
             objectsContext.endIndirectObject()
             try {
                 const images = Object.keys(pageJSObject.Resources.toJSObject().XObject.toJSObject())
-                console.log('images', images)
                 for (const image of images) {
                     const imageId = pageJSObject.Resources.toJSObject().XObject.toJSObject()[image].getObjectID()
                     objectsContext.startModifiedIndirectObject(imageId)
