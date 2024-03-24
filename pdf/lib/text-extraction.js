@@ -101,7 +101,7 @@ function TStar (state) {
 
 function Quote (text, state, placements) {
     TStar(state)
-    textPlacement({ asEncodedText:text.value, asBytes:text.toBytesArray() }, state, placements)
+    textPlacement({ asEncodedText: text.value, asBytes: text.toBytesArray() }, state, placements)
 }
 
 function textPlacement (input, state, placements) {
@@ -239,7 +239,7 @@ function collectPlacements (resources, placements, formsUsed) {
             // Text placement operators
             case 'Tj': {
                 const param = operands.pop()
-                textPlacement({ asEncodedText:param.value, asBytes:param.toBytesArray() }, state, placements)
+                textPlacement({ asEncodedText: param.value, asBytes: param.toBytesArray() }, state, placements)
                 break
             }
             case '\'': {
@@ -260,7 +260,7 @@ function collectPlacements (resources, placements, formsUsed) {
                 const params = operands.pop().toPDFArray().toJSArray()
                 textPlacement(_.map(params, (item)=>{
                     if (item.getType() === hummus.ePDFObjectLiteralString || item.getType() === hummus.ePDFObjectHexString) 
-                        return { asEncodedText:item.value, asBytes:item.toBytesArray() }
+                        return { asEncodedText: item.value, asBytes: item.toBytesArray() }
                     else
                         return item.value
                 }), state, placements)

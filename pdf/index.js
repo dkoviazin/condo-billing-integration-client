@@ -90,6 +90,7 @@ class PdfEditor {
         const hexString = `<${Buffer.from(bytes).toString('hex')}>`
         return streamContent
             .split(hexString).join('')
+            .split(hexString.toUpperCase()).join('')
             .split(text).join('')
             .split(octalString).join('')
     }
@@ -109,7 +110,9 @@ class PdfEditor {
             const pageObject = copyingContext.getSourceDocumentParser().parsePage(page)
             const pageJSObject = pageObject.getDictionary().toJSObject()
             const textStream = copyingContext.getSourceDocumentParser().queryDictionaryObject(pageObject.getDictionary(), 'Contents')
+
             const textObjectID = pageObject.getDictionary().toJSObject().Contents.getObjectID()
+
             let data = []
             const readStream = copyingContext.getSourceDocumentParser().startReadingFromStream(textStream)
             while (readStream.notEnded()) {
@@ -118,6 +121,14 @@ class PdfEditor {
             }
             let { encoding } = jschardet.detect(Buffer.from(data))
             let pdfPageAsString = iconv.decode(Buffer.from(data), encoding)
+            let images = []
+            try {
+                images = Object.keys(pageJSObject.Resources.toJSObject().XObject.toJSObject())
+            } catch (err) {
+                console.log('NO IMAGES - WILL REMOVE ALL LINES')
+                // TODO: Find a better solution to remove vector graphics QR CODE
+                pdfPageAsString = pdfPageAsString.replace(/[0-9.\s]+m[0-9.\s]+l[0-9.\s]+l[0-9.\s]+l/g, '')
+            }
             for (const node of nodesToClear) {
                 pdfPageAsString = this.replaceNode(pdfPageAsString, node)
             }
@@ -127,7 +138,6 @@ class PdfEditor {
             objectsContext.endPDFStream(stream)
             objectsContext.endIndirectObject()
             try {
-                const images = Object.keys(pageJSObject.Resources.toJSObject().XObject.toJSObject())
                 for (const image of images) {
                     const imageId = pageJSObject.Resources.toJSObject().XObject.toJSObject()[image].getObjectID()
                     objectsContext.startModifiedIndirectObject(imageId)
@@ -136,7 +146,7 @@ class PdfEditor {
                     objectsContext.endIndirectObject()
                 }
             } catch (err) {
-                console.log('Skipp image remove', pageJSObject.Resources.toJSObject())
+                console.log('ERROR ON REMOVING IMAGE', err)
             }
         }
         modPdfWriter.end()
