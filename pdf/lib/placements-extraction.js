@@ -1,4 +1,4 @@
-const hummus = require('hummus')
+const hummus = require('muhammara')
 const { map, forOwn, mapValues, extend, pickBy } = require('lodash')
 
 const MultiDictHelper = require('./multi-dict-helper')

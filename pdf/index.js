@@ -1,6 +1,6 @@
 const { Duplex } = require('stream')
 
-const hummus = require('hummus')
+const hummus = require('muhammara')
 const iconv = require('iconv-lite')
 const jschardet = require('jschardet')
 const MemoryStream = require('memory-streams')

@@ -1,4 +1,4 @@
-const hummus = require('hummus')
+const hummus = require('muhammara')
 
 function PDFInterpreter () {
 

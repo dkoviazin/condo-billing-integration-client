@@ -87,9 +87,6 @@ class Sync {
         time = logger.stopTimer()
         logger.addLog(LOG_PDF_RECEIPTS_COUNT_MESSAGE, time)
         Object.entries(pdfResult).filter(([value]) => value).map(([name, value]) => logger.addLog(name, value))
-        await this.condo.updateContext(this.contextId, {
-            lastReport: { period: this.period, finishTime: new Date().toISOString(), totalReceipts: receipts.length }
-        })
         await logger.notify()
         return receipts.length
     }
