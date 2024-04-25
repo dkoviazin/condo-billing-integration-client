@@ -36,9 +36,8 @@ class CondoBilling extends ApolloServerClient {
             modelGql: BillingRecipient,
             where: {
                 ...where,
-                isApproved: true,
             }
-        })).map(({ bic, ...recipient }) => ({ ...recipient, routingNumber: bic }))
+        })).filter(({ isApproved }) => isApproved === true).map(({ bic, ...recipient }) => ({ ...recipient, routingNumber: bic }))
     }
 
     async getBillingContexts (where = {}) {

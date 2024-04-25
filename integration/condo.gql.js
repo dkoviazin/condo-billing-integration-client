@@ -11,7 +11,7 @@ const BillingReceipt = generateGqlQueries('BillingReceipt', BILLING_RECEIPT_FIEL
 const BILLING_RECEIPT_FILE_FIELDS = `{ id v controlSum importId publicDataFile { originalFilename } }`
 const BillingReceiptFile = generateGqlQueries('BillingReceiptFile', BILLING_RECEIPT_FILE_FIELDS)
 
-const BILLING_RECIPIENT_FIELDS = '{ id bankAccount bic tin importId }'
+const BILLING_RECIPIENT_FIELDS = '{ id bankAccount bic tin importId isApproved }'
 const BillingRecipient =  generateGqlQueries('BillingRecipient', BILLING_RECIPIENT_FIELDS)
 
 

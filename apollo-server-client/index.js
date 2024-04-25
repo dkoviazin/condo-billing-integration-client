@@ -5,7 +5,7 @@ const { onError }  = require('apollo-link-error')
 const { createUploadLink } = require('apollo-upload-client')
 const FormData = require('form-data')
 const { chunk: splitArray } = require('lodash')
-const fetch = require('cross-fetch')
+const fetch  = require('cross-fetch')
 const { generateGqlQueries } = require('./gql-generate')
 
 

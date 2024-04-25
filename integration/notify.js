@@ -1,5 +1,6 @@
-const fetch = require('cross-fetch')
-const { isNil} = require("lodash");
+const { fetch }  = require('./utils')
+
+const { isNil} = require('lodash')
 
 const { url, chatId } = process.env['NOTIFY_TELEGRAM'] ? JSON.parse(process.env['NOTIFY_TELEGRAM']) : {}
 
