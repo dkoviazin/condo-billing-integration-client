@@ -173,9 +173,19 @@ class ApolloServerClient {
         const decodedToken = decodeURIComponent(miniAppAuth.cookieJar.get('keystone.sid'))
 
         const miniAppClient = new ApolloServerClient(apiEndpoint, this.authRequisites)
-        miniAppClient.authToken = decodedToken.split('s:')[1]
-
+        miniAppClient.signInByToken(decodedToken.split('s:')[1])
         return miniAppClient
+    }
+
+    signInByToken (token) {
+        this.authToken = token
+        this.#isAuthorized = true
+        this.signIn = async function () {
+            console.log('Authed by token, no signIn')
+        }
+        this.signOut = async function () {
+            console.log('Authed by token, no signOut')
+        }
     }
 
     async singInByEmailAndPassword () {
