@@ -108,8 +108,14 @@ class Sync {
         await this.init()
         let receiptsCount = await this.sync()
         if (receiptsCount === 0 && this.syncPeriodBefore) {
-            this.period = dayjs(this.period, 'YYYY-MM-DD').add(-1, 'month').format('YYYY-MM-01')
-            await this.sync()
+            let maxDepth = 6
+            while (--maxDepth > 0) {
+                this.period = dayjs(this.period, 'YYYY-MM-DD').add(-1, 'month').format('YYYY-MM-01')
+                receiptsCount = await this.sync()
+                if (receiptsCount) {
+                    break
+                }
+            }
         }
         await this.condo.signOut()
     }
