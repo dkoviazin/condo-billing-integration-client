@@ -32,9 +32,6 @@ class Sync {
         this.period = period
         this.organization = {}
         this.condo = new CondoBilling(endpoint, authRequisites)
-        if (token) {
-            this.condo.signInByToken(token)
-        }
     }
 
     async getReceiptsFromIntegration () {
@@ -95,7 +92,11 @@ class Sync {
 
 
     async init () {
-        await this.condo.signIn()
+        if (token) {
+            await this.condo.signInByToken(token)
+        } else {
+            await this.condo.signIn()
+        }
         const [{ id, settings, organization: { name, tin } }] = await this.condo.getBillingContexts({ id: this.contextId })
         if (!id) {
             // Error
