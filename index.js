@@ -14,7 +14,7 @@ const {
 
 const { CondoBilling } = require('./integration/condoBilling')
 
-const { endpoint, authRequisites } = process.env.CONDO_INTEGRATION ? JSON.parse(process.env.CONDO_INTEGRATION) : {}
+const { endpoint, authRequisites, token } = process.env.CONDO_INTEGRATION ? JSON.parse(process.env.CONDO_INTEGRATION) : {}
 
 const parseArguments = (args) => {
     const translates = { '--context': 'context', '-c': 'context', '--period': 'period', '-p': 'period' }
@@ -32,6 +32,9 @@ class Sync {
         this.period = period
         this.organization = {}
         this.condo = new CondoBilling(endpoint, authRequisites)
+        if (token) {
+            this.condo.signInByToken(token)
+        }
     }
 
     async getReceiptsFromIntegration () {
