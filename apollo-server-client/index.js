@@ -44,6 +44,7 @@ const normalizeAuthRequisites = (requisites = {}) => {
         ['email', email || identity],
         ['password', password || secret],
         ['phone', phone],
+        ['token', token],
     ].filter(([, value]) => !!value))
 }
 
@@ -130,6 +131,10 @@ class ApolloServerClient {
     }
 
     async signIn () {
+        if (Reflect.has(this.authRequisites, 'token')) {
+            this.signInByToken(this.authRequisites.token)
+            return
+        }
         if (Reflect.has(this.authRequisites, 'phone')) {
             await this.singInByPhoneAndPassword()
         } else {
@@ -138,6 +143,10 @@ class ApolloServerClient {
     }
 
     async signOut () {
+        if (Reflect.has(this.authRequisites, 'token')) {
+            // do not destroy token
+            return
+        }
         const { data: { unauthenticateUser: { success } } } = await this.client.mutate({
             mutation: SIGNOUT_MUTATION,
         })
@@ -180,12 +189,6 @@ class ApolloServerClient {
     signInByToken (token) {
         this.authToken = token
         this.#isAuthorized = true
-        this.signIn = async function () {
-            console.log('Authed by token, no signIn')
-        }
-        this.signOut = async function () {
-            console.log('Authed by token, no signOut')
-        }
     }
 
     async singInByEmailAndPassword () {
