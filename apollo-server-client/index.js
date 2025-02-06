@@ -39,7 +39,7 @@ class UploadingFile {
 }
 
 const normalizeAuthRequisites = (requisites = {}) => {
-    const { email, identity, password, secret, phone } = requisites
+    const { email, identity, password, secret, phone, token } = requisites
     return Object.fromEntries([
         ['email', email || identity],
         ['password', password || secret],
