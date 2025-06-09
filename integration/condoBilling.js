@@ -198,7 +198,7 @@ class CondoBilling extends ApolloServerClient {
                         data: {
                             ...this.dvSender(),
                             context: { id: contextId },
-                            receipts: chunk.map(({ raw, receipt}) => {
+                            receipts: chunk.map(({ raw, ...receipt }) => {
                                 return {
                                     ...receipt,
                                     ...DEFAULT_SAVE_RAW_DATA ? { raw } : {},

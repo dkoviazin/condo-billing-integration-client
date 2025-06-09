@@ -120,6 +120,9 @@ class PdfEditor {
                 data = data.concat(readData)
             }
             let { encoding } = jschardet.detect(Buffer.from(data))
+            if (encoding === 'x-mac-cyrillic' || encoding === 'xmaccyrillic') {
+                encoding = 'windows-1251'
+            }
             let pdfPageAsString = iconv.decode(Buffer.from(data), encoding)
             let images = []
             try {
