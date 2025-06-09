@@ -24,8 +24,9 @@ const {
 } = require('./condo.gql')
 const {
     CONDO_SAVE_CHUNK_SIZE,
+    DEFAULT_SAVE_RAW_DATA,
 } = require('../constants')
-const { stream2buffer } = require("../pdf");
+const { stream2buffer } = require('../pdf')
 
 const createHash = (input) => crypto.createHash('md5').update(input).digest('hex')
 
@@ -180,7 +181,7 @@ class CondoBilling extends ApolloServerClient {
             })) } : {}
         }
     }
-    async saveReceipts (contextId, receipts = [], period) {
+    async saveReceipts (contextId, receipts = []) {
         const receiptWithTypes = receipts.map(this.setTypesToReceipt.bind(this))
         const chunks = chunk(receiptWithTypes, CONDO_SAVE_CHUNK_SIZE)
         const result = {
@@ -197,7 +198,12 @@ class CondoBilling extends ApolloServerClient {
                         data: {
                             ...this.dvSender(),
                             context: { id: contextId },
-                            receipts: chunk,
+                            receipts: chunk.map(({ raw, receipt}) => {
+                                return {
+                                    ...receipt,
+                                    ...DEFAULT_SAVE_RAW_DATA ? { raw } : {},
+                                }
+                            }),
                         },
                     },
                 })
