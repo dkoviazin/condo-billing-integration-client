@@ -2,7 +2,6 @@ const crypto = require('crypto')
 const { ApolloServerClient } = require('../apollo-server-client')
 const Big = require('big.js')
 const { get, isEmpty, chunk} = require('lodash')
-const { clearSensitiveData, bufferToStream } = require('../pdf/index.js')
 const {
     PDF_CREATE_MESSAGE,
     PDF_UPDATE_MESSAGE,
@@ -17,16 +16,14 @@ const dayjs = require('dayjs')
 
 const {
     BillingReceiptFile: FileGql,
-    BillingReceipt: BillingReceiptGql,
     BillingContext: ContextGql,
     BillingRecipient,
-    REGISTER_BILLING_RECEIPTS_MUTATION, BillingReceiptFix,
+    REGISTER_BILLING_RECEIPTS_MUTATION,
 } = require('./condo.gql')
 const {
     CONDO_SAVE_CHUNK_SIZE,
     DEFAULT_SAVE_RAW_DATA,
 } = require('../constants')
-const { stream2buffer } = require('../pdf')
 
 const createHash = (input) => crypto.createHash('md5').update(input).digest('hex')
 
@@ -48,40 +45,19 @@ class CondoBilling extends ApolloServerClient {
         })
     }
 
-    async updateContext (id, updateInput = {}) {
-        return await this.updateModel({
-            modelGql: ContextGql,
-            id,
-            updateInput,
-        })
-    }
-
-    async processPDFFile (buffer, receipt) {
-        const { accountMeta } = receipt
-        return await clearSensitiveData(buffer,[get(accountMeta, 'fullName')])
-    }
-
     async getPDFStreams (streams, receipt) {
-        const { getPublicDataStream, getSensitiveDataStream } = streams
+        const { getSensitiveDataStream } = streams
         const sensitiveStream = await getSensitiveDataStream(receipt)
         if (!sensitiveStream) {
             return {}
         }
-        const sensitiveBuffer = await stream2buffer(sensitiveStream)
-        const publicStream = await getPublicDataStream(receipt)
-        const publicBuffer = publicStream ? await stream2buffer(publicStream) : await this.processPDFFile(sensitiveBuffer, receipt)
         const name = [receipt.accountNumber, receipt.year, receipt.month].join('_')
         return {
-            ...sensitiveBuffer ? { sensitiveDataFile: this.createUploadFile({
-                    stream: bufferToStream(sensitiveBuffer),
+                sensitiveDataFile: this.createUploadFile({
+                    stream: sensitiveStream,
                     filename: `${name}.private.pdf`,
                     mimetype: 'application/pdf',
-            }) } : {},
-            ...publicBuffer ? { publicDataFile: this.createUploadFile({
-                    stream: bufferToStream(publicBuffer),
-                    filename: `${name}.public.pdf`,
-                    mimetype: 'application/pdf',
-                }) } : {},
+                })
         }
     }
 
@@ -138,13 +114,16 @@ class CondoBilling extends ApolloServerClient {
             }
         }
     }
+
     toMoney (value) {
         return Big(value || 0).toFixed(2)
     }
+
     toMoneyOrNull (value) {
         const money = this.toMoney(value)
         return money === '0.00' ? null : money
     }
+
     setTypesToToPayDetails (toPayDetails) {
         const {  charge, balance, penalty, paid, privilege, recalculation, volume, tariff } = toPayDetails
         return {
@@ -159,6 +138,7 @@ class CondoBilling extends ApolloServerClient {
             ...tariff ? { tariff: String(tariff) } : {},
         }
     }
+
     setTypesToReceipt (receipt) {
         const { importId, accountNumber, accountMeta, address, addressMeta, tin, bankAccount, routingNumber, raw, year, month, services, toPay, toPayDetails, category } = receipt
         return {
@@ -181,6 +161,7 @@ class CondoBilling extends ApolloServerClient {
             })) } : {}
         }
     }
+
     async saveReceipts (contextId, receipts = []) {
         const receiptWithTypes = receipts.map(this.setTypesToReceipt.bind(this))
         const chunks = chunk(receiptWithTypes, CONDO_SAVE_CHUNK_SIZE)
