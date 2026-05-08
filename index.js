@@ -2,7 +2,7 @@ const cliProgress = require('cli-progress')
 const dayjs = require('dayjs')
 const { Logger } = require('./integration/notify')
 const { chunk } = require('lodash')
-const { fetch } = require('./integration/utils')
+const { fetchWithRetry, bufferToStream, stream2buffer } = require('./apollo-server-client')
 
 const {
     LOG_RECEIPTS_LOADED_MESSAGE,
@@ -22,7 +22,7 @@ const parseArguments = (args) => {
 }
 
 class Sync {
-    constructor({ integration, args, syncPeriodBefore = true }) {
+    constructor ({ integration, args, syncPeriodBefore = true }) {
         const DEFAULT_PERIOD = dayjs().format('YYYY-MM-01')
         const { context: contextId, period = DEFAULT_PERIOD } = parseArguments(args)
         this.period = period
@@ -36,8 +36,7 @@ class Sync {
 
     async getReceiptsFromIntegration () {
         try {
-            const { receipts } = await this.integration.getAllReceipts({ tin: this.organization.tin, period: this.period })
-            return { receipts }
+            return this.integration.getAllReceipts({ tin: this.organization.tin, period: this.period })
         } catch (error) {
             return { error }
         }
@@ -71,14 +70,10 @@ class Sync {
         const progress = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic);
         progress.start(withFiles.length)
         const pdfResult = {}
-        for (const { importId, accountMeta, accountNumber, raw } of withFiles) {
-            const receiptResult = await this.condo.saveBillingReceiptFile({
-                getPublicDataStream: this.integration.getPublicFilePDFStream.bind(this.integration),
-                getSensitiveDataStream: this.integration.getSensitiveFilePDFStream.bind(this.integration),
-            }, { contextId: this.contextId, importId, raw, accountMeta, accountNumber, period: this.period })
-            if (!pdfResult[receiptResult]) {
-                pdfResult[receiptResult] = 0
-            }
+        for (const receipt of withFiles) {
+            const pdfBuffer = await this.integration.getPDFBuffer(receipt)
+            const receiptResult = await this.condo.saveBillingReceiptFile(this.contextId, pdfBuffer, receipt)
+            pdfResult[receiptResult] ||= 0
             progress.increment(1)
             pdfResult[receiptResult]++
         }
@@ -174,18 +169,20 @@ class Integration {
      *
      * @async
      * @param {Object} receipt - The integration receipt object.
-     * @returns {Promise<Stream|null>} A stream representing the sensitive data, or null if no sensitive data is available.
+     * @returns {Promise<Buffer|null>} A stream representing the sensitive data, or null if no sensitive data is available.
      * @throws {Error} Throws an error if the method is not overridden.
      * @abstract
      */
-    async getSensitiveFilePDFStream (receipt) {
+    async getPDFBuffer (receipt) {
         throw new Error(NOT_IMPLEMENTED_ERROR)
     }
 }
 
 
 module.exports = {
-    fetch,
+    fetchWithRetry,
     Sync,
     Integration,
+    bufferToStream,
+    stream2buffer,
 }

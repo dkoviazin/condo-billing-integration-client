@@ -19,6 +19,7 @@ const {
     BillingContext: ContextGql,
     BillingRecipient,
     REGISTER_BILLING_RECEIPTS_MUTATION,
+    REGISTER_BILLING_RECEIPT_FILE_MUTATION,
 } = require('./condo.gql')
 const {
     CONDO_SAVE_CHUNK_SIZE,
@@ -39,80 +40,44 @@ class CondoBilling extends ApolloServerClient {
     }
 
     async getBillingContexts (where = {}) {
-        return await this.loadByChunks({
+        return this.loadByChunks({
             modelGql: ContextGql,
             where: where,
         })
     }
 
-    async getPDFStreams (streams, receipt) {
-        const { getSensitiveDataStream } = streams
-        const sensitiveStream = await getSensitiveDataStream(receipt)
-        if (!sensitiveStream) {
-            return {}
+    async saveBillingReceiptFile (contextId, pdfBuffer, receipt) {
+        if (!pdfBuffer) {
+            return PDF_ERROR_MESSAGE
         }
-        const name = [receipt.accountNumber, receipt.year, receipt.month].join('_')
-        return {
-                sensitiveDataFile: this.createUploadFile({
-                    stream: sensitiveStream,
-                    filename: `${name}.private.pdf`,
-                    mimetype: 'application/pdf',
-                })
-        }
-    }
-
-    async saveBillingReceiptFile (streams, receipt) {
-        const { contextId, importId, raw } = receipt
-        const [existing] = await this.getModels({ modelGql: FileGql, where: {
-            importId: String(importId),
-            context: { id: contextId },
-        }})
-        const controlSum = createHash(JSON.stringify(raw))
-        if (existing) {
-            if (existing.controlSum !== controlSum) {
-                try {
-                    const files = await this.getPDFStreams(streams, receipt)
-                    if (!isEmpty(files)) {
-                        await this.updateModel({
-                            modelGql: FileGql, id: existing.id,
-                            updateInput: {
-                                ...files,
-                                controlSum,
-                            },
-                        })
-                        return PDF_UPDATE_MESSAGE
-                    } else {
-                        return PDF_ERROR_MESSAGE
-                    }
-                } catch (error) {
-                    console.error(error)
-                    return PDF_ERROR_MESSAGE
-                }
-            } else {
-                return PDF_SKIPP_MESSAGE
+        const [existing] = await this.getModels({
+            modelGql: FileGql,
+            where: {
+                importId: String(receipt.importId),
+                context: { id: contextId },
             }
-        } else {
+        })
+        const base64EncodedPDF = Buffer.from(pdfBuffer, 'base64').toString('base64')
+        const controlSum = createHash(base64EncodedPDF)
+        if (!existing || existing.controlSum !== controlSum) {
             try {
-                const files = await this.getPDFStreams(streams, receipt)
-                if (!isEmpty(files)) {
-                    await this.createModel({
-                        modelGql: FileGql,
-                        createInput: {
-                            importId: String(importId),
-                            context: { connect: { id: contextId } },
-                            ...files,
-                            controlSum,
-                        }
-                    })
-                    return PDF_CREATE_MESSAGE
-                } else {
-                    return PDF_ERROR_MESSAGE
-                }
+                await this.client.mutate({
+                    mutation: REGISTER_BILLING_RECEIPT_FILE_MUTATION,
+                    variables: {
+                        data: {
+                            ...this.dvSender(),
+                            context: { id: contextId },
+                            receipt: { importId: String(receipt.importId) },
+                            base64EncodedPDF,
+                        },
+                    },
+                })
+                return !existing ? PDF_CREATE_MESSAGE : PDF_UPDATE_MESSAGE
             } catch (error) {
-                console.error(error)
                 return PDF_ERROR_MESSAGE
             }
         }
+        return PDF_SKIPP_MESSAGE
     }
 
     toMoney (value) {

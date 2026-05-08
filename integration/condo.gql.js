@@ -21,10 +21,17 @@ const REGISTER_BILLING_RECEIPTS_MUTATION = gql`
     }
 `
 
+const REGISTER_BILLING_RECEIPT_FILE_MUTATION = gql`
+    mutation registerBillingReceiptFile ($data: RegisterBillingReceiptFileInput!) {
+        result: registerBillingReceiptFile(data: $data) { id status }
+    }
+`
+
 module.exports = {
     BillingContext,
     BillingRecipient,
     BillingReceipt,
     BillingReceiptFile,
     REGISTER_BILLING_RECEIPTS_MUTATION,
+    REGISTER_BILLING_RECEIPT_FILE_MUTATION,
 }

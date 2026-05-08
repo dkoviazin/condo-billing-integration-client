@@ -1,4 +1,4 @@
-const { fetch }  = require('./utils')
+const { fetchWithRetry }  = require('../apollo-server-client')
 
 const { isNil} = require('lodash')
 
@@ -27,7 +27,6 @@ class Logger {
 
     addLog (name, value ) {
         const log = `<b>${name}</b> ${!isNil(value) ? ': ' + value : ''}`
-        console.log(log)
         this.logs.push(log)
     }
 
@@ -43,8 +42,12 @@ class Logger {
 
 
 const sendNotificationMessage = async (message) => {
+    if (!chatId || !url) {
+        console.log(`[NOTIFY] ${message}`)
+        return
+    }
     try {
-        const response = await fetch(url, {
+        const response = await fetchWithRetry(url, {
             method: 'POST',
             mode: 'cors',
             cache: 'no-cache',

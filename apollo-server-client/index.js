@@ -5,16 +5,13 @@ const { onError }  = require('apollo-link-error')
 const { createUploadLink } = require('apollo-upload-client')
 const FormData = require('form-data')
 const { chunk: splitArray } = require('lodash')
-const fetch  = require('cross-fetch')
 const { generateGqlQueries } = require('./gql-generate')
+const { fetchWithRetry } = require('./fetchWithRetry')
+const { Duplex } = require('stream')
 
 
 const { MAX_REQUESTS_IN_BATCH, MAX_MODIFY_OPERATIONS_IN_REQUEST, MAX_RETRIES_ON_NETWORK_ERROR, LOAD_CHUNK_SIZE } = require('./constants')
 const { SIGNIN_BY_EMAIL_MUTATION, SIGNOUT_MUTATION, SIGNIN_BY_PHONE_AND_PASSWORD_MUTATION } = require('./lib/gql')
-
-if (!globalThis.fetch) {
-    globalThis.fetch = fetch
-}
 
 class UploadingFile {
     constructor ({ stream, filename, mimetype, encoding }) {
@@ -52,11 +49,11 @@ class OIDCAuthClient {
 
     constructor (authToken) {
         this.authToken = authToken
-        this.cookieJar = new fetch.Headers()
+        this.cookieJar = new fetchWithRetry.Headers()
     }
 
     async oidcRequest (url) {
-        const response = await fetch(url, {
+        const response = await fetchWithRetry(url, {
             headers: {
                 ...this.authToken ? { authorization: `Bearer ${this.authToken}` } : {},
                 cookie: [...this.cookieJar.entries()].map(([name, value]) => `${name}=${value}`).join('; '),
@@ -222,9 +219,9 @@ class ApolloServerClient {
         }
 
         if (opts.batchClient) {
-            return await this.batchClient.query(queryArgs)
+            return this.batchClient.query(queryArgs)
         } else {
-            return await this.client.query(queryArgs)
+            return this.client.query(queryArgs)
         }
     }
 
@@ -234,9 +231,9 @@ class ApolloServerClient {
         }
 
         if (opts.batchClient) {
-            return await this.batchClient.mutate(mutationArgs)
+            return this.batchClient.mutate(mutationArgs)
         } else {
-            return await this.client.mutate(mutationArgs)
+            return this.client.mutate(mutationArgs)
         }
     }
 
@@ -272,7 +269,6 @@ class ApolloServerClient {
                 sortBy,
             },
         })
-
         return count
     }
 
@@ -389,7 +385,8 @@ class ApolloServerClient {
         })
     }
 
-    createUploadFile ({ stream, filename, mimetype, encoding }) {
+    createUploadFile ({ stream, buffer, filename, mimetype, encoding }) {
+        stream ||= bufferToStream(buffer)
         return new UploadingFile({ stream, filename, mimetype, encoding })
     }
 
@@ -408,7 +405,7 @@ class ApolloServerClient {
                     form.append(name, file.stream)
                 }
             },
-            fetch,
+            fetch: fetchWithRetry,
         })
     }
 
@@ -436,8 +433,25 @@ class ApolloServerClient {
 }
 
 
+function bufferToStream (content) {
+    const tmp = new Duplex()
+    tmp.push(content)
+    tmp.push(null)
+    return tmp
+}
+async function stream2buffer (stream) {
+    const chunks = [];
+    for await (const chunk of stream) {
+        chunks.push(chunk);
+    }
+    return Buffer.concat(chunks);
+}
+
 
 module.exports = {
     ApolloServerClient,
     generateGqlQueries,
+    fetchWithRetry,
+    bufferToStream,
+    stream2buffer,
 }
