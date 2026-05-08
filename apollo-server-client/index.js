@@ -49,7 +49,7 @@ class OIDCAuthClient {
 
     constructor (authToken) {
         this.authToken = authToken
-        this.cookieJar = new fetchWithRetry.Headers()
+        this.cookieJar = new Headers()
     }
 
     async oidcRequest (url) {
@@ -64,7 +64,7 @@ class OIDCAuthClient {
         if (response.status >= 400) {
             throw new Error(`OIDC request failed: ${response.status} ${response.statusText}`)
         }
-        const newCookies = response.headers.raw()['set-cookie']
+        const newCookies = getSetCookie(response.headers)
         if (newCookies) {
             newCookies.forEach(cookie => {
                 const [cookieValue] = cookie.split(';')
@@ -78,6 +78,20 @@ class OIDCAuthClient {
         }
     }
 
+}
+
+function getSetCookie (headers) {
+    if (!headers) {
+        return []
+    }
+    if (typeof headers.getSetCookie === 'function') {
+        return headers.getSetCookie()
+    }
+    if (typeof headers.raw === 'function') {
+        return headers.raw()['set-cookie'] || []
+    }
+    const singleCookie = headers.get('set-cookie')
+    return singleCookie ? [singleCookie] : []
 }
 
 class ApolloServerClient {

@@ -9,3 +9,4 @@ cache/*.json
 .DS_Store
 example
 check.js
+check2.js

@@ -1,7 +1,5 @@
 const CONDO_SAVE_CHUNK_SIZE = 50
-const DEFAULT_SAVE_RAW_DATA = false
 
 module.exports = {
     CONDO_SAVE_CHUNK_SIZE,
-    DEFAULT_SAVE_RAW_DATA,
 }

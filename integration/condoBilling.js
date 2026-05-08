@@ -23,7 +23,6 @@ const {
 } = require('./condo.gql')
 const {
     CONDO_SAVE_CHUNK_SIZE,
-    DEFAULT_SAVE_RAW_DATA,
 } = require('../constants')
 
 const createHash = (input) => crypto.createHash('md5').update(input).digest('hex')
@@ -105,7 +104,7 @@ class CondoBilling extends ApolloServerClient {
     }
 
     setTypesToReceipt (receipt) {
-        const { importId, accountNumber, accountMeta, address, addressMeta, tin, bankAccount, routingNumber, raw, year, month, services, toPay, toPayDetails, category } = receipt
+        const { importId, accountNumber, accountMeta, address, addressMeta, tin, bankAccount, routingNumber, year, month, services, toPay, toPayDetails, category } = receipt
         return {
             ...importId ? { importId: String(importId) } : {},
             accountNumber: String(accountNumber),
@@ -113,7 +112,6 @@ class CondoBilling extends ApolloServerClient {
             address,
             addressMeta,
             tin: String(tin), bankAccount: String(bankAccount), routingNumber: String(routingNumber),
-            raw,
             ...category ? { category } : {},
             year: Number(year), month: Number(month),
             toPay: this.toMoney(toPay),
@@ -144,12 +142,7 @@ class CondoBilling extends ApolloServerClient {
                         data: {
                             ...this.dvSender(),
                             context: { id: contextId },
-                            receipts: chunk.map(({ raw, ...receipt }) => {
-                                return {
-                                    ...receipt,
-                                    ...DEFAULT_SAVE_RAW_DATA ? { raw } : {},
-                                }
-                            }),
+                            receipts: chunk,
                         },
                     },
                 })
