@@ -93,7 +93,7 @@ class Sync {
 
     async init () {
         if (token) {
-            await this.condo.signInByToken(token)
+            this.condo.signInByToken(token)
         } else {
             await this.condo.signIn()
         }
@@ -168,18 +168,6 @@ class Integration {
         throw new Error(NOT_IMPLEMENTED_ERROR)
     }
 
-    /**
-     * Retrieves the public file PDF stream for a given integration receipt.
-     *
-     * @async
-     * @param {Object} receipt - The integration receipt object.
-     * @returns {Promise<Stream|null>} A stream representing the public file PDF.
-     * @throws {Error} Throws an error if the method is not overridden or if no public version is available.
-     * @abstract
-     */
-    async getPublicFilePDFStream (receipt) {
-        throw new Error(NOT_IMPLEMENTED_ERROR)
-    }
 
     /**
      * Retrieves the sensitive data stream for a given integration receipt.
