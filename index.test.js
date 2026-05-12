@@ -2,6 +2,10 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 
 const { Sync, Integration, parseArguments } = require('./index')
+const {
+    NOT_IMPLEMENTED_ERROR,
+    FAILED_TO_GET_RECEIPTS_ERROR,
+} = require('./constants')
 
 function createLogger() {
     return {
@@ -53,9 +57,9 @@ test('parseArguments ignores unknown or incomplete pairs', () => {
 test('Integration base class methods are abstract', async () => {
     const integration = new Integration()
 
-    await assert.rejects(integration.getAllReceipts({ tin: '1', period: '2026-01-01' }), /Not implemented/)
-    assert.throws(() => integration.hasPDFFile({}), /Not implemented/)
-    await assert.rejects(integration.getPDFBuffer({}), /Not implemented/)
+    await assert.rejects(integration.getAllReceipts({ tin: '1', period: '2026-01-01' }), new RegExp(NOT_IMPLEMENTED_ERROR))
+    assert.throws(() => integration.hasPDFFile({}), new RegExp(NOT_IMPLEMENTED_ERROR))
+    await assert.rejects(integration.getPDFBuffer({}), new RegExp(NOT_IMPLEMENTED_ERROR))
 })
 
 test('Sync retries previous months and signs out after successful run', async () => {
@@ -196,6 +200,6 @@ test('Sync signs out even when integration fails', async () => {
         },
     })
 
-    await assert.rejects(sync.run(), /FAILED TO GET RECEIPTS FROM INTEGRATION/)
+    await assert.rejects(sync.run(), new RegExp(FAILED_TO_GET_RECEIPTS_ERROR))
     assert.equal(signOutCalled, 1)
 })

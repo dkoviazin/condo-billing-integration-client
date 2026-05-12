@@ -11,6 +11,7 @@ const {
     LOG_PDF_RECEIPTS_COUNT_MESSAGE,
     LOG_CONDO_SAVE_MESSAGE,
     NOT_IMPLEMENTED_ERROR,
+    FAILED_TO_GET_RECEIPTS_ERROR,
 } = require('./constants')
 
 const { CondoBilling } = require('./integration/condoBilling')
@@ -62,7 +63,7 @@ class Sync {
         if (error) {
             logger.addLog('🔥 ' + error.toString())
             await logger.notify()
-            throw new Error('FAILED TO GET RECEIPTS FROM INTEGRATION')
+            throw new Error(FAILED_TO_GET_RECEIPTS_ERROR)
         }
         let time = logger.stopTimer()
         logger.addLog(`${LOG_RECEIPTS_LOADED_MESSAGE} (${receipts.length})`, time)
