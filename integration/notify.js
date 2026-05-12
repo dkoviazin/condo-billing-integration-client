@@ -37,9 +37,7 @@ class Logger {
     async notify () {
         await sendNotificationMessage(this.logs.join('\n'))
     }
-
 }
-
 
 const sendNotificationMessage = async (message) => {
     if (!chatId || !url) {

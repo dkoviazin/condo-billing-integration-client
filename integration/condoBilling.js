@@ -56,7 +56,7 @@ class CondoBilling extends ApolloServerClient {
                 context: { id: contextId },
             }
         })
-        const base64EncodedPDF = Buffer.from(pdfBuffer, 'base64').toString('base64')
+        const base64EncodedPDF = Buffer.from(pdfBuffer).toString('base64')
         const controlSum = createHash(base64EncodedPDF)
         if (!existing || existing.controlSum !== controlSum) {
             try {

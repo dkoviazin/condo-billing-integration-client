@@ -110,14 +110,6 @@ class Integration {
 }
 ```
 
-The base class also calls:
-
-```js
-setCondoSettings({ settings, recipients })
-```
-
-Use it to apply per-context settings and recipient overrides.
-
 ## Minimal receipt shape
 
 A receipt must contain:
