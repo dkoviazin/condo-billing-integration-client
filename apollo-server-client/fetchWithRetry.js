@@ -1,3 +1,5 @@
+const { PassThrough } = require('stream')
+
 const RETRYABLE_ERROR_CODES = new Set([
     'ECONNRESET',
     'ECONNREFUSED',
@@ -115,6 +117,80 @@ function isRetryableFailure(error, { requestSignal, timeoutSignal }) {
     if (requestSignal?.aborted) return false
     if (timeoutSignal?.aborted) return true
     return isRetryableNetworkError(error)
+}
+
+function isLegacyFormDataBody(body) {
+    return Boolean(
+        body &&
+        typeof body.getHeaders === 'function' &&
+        typeof body.getBoundary === 'function' &&
+        typeof body.pipe === 'function'
+    )
+}
+
+function mergeHeaders(baseHeaders, extraHeaders) {
+    const headers = new Headers(baseHeaders || {})
+    Object.entries(extraHeaders || {}).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+            headers.set(key, String(value))
+        }
+    })
+    return headers
+}
+
+function hasHeader(headers, headerName) {
+    if (!headers) return false
+    if (headers instanceof Headers) {
+        return headers.has(headerName)
+    }
+    if (Array.isArray(headers)) {
+        return headers.some(([name]) => String(name).toLowerCase() === headerName.toLowerCase())
+    }
+    if (typeof headers === 'object') {
+        return Object.keys(headers).some((name) => name.toLowerCase() === headerName.toLowerCase())
+    }
+    return false
+}
+
+function getLegacyFormDataLength(body) {
+    return new Promise((resolve, reject) => {
+        body.getLength((error, length) => {
+            if (error) {
+                reject(error)
+                return
+            }
+            resolve(length)
+        })
+    })
+}
+
+async function prepareRequestOptions(options) {
+    if (!isLegacyFormDataBody(options.body)) {
+        return options
+    }
+
+    const headers = mergeHeaders(options.headers, options.body.getHeaders())
+
+    if (!hasHeader(headers, 'content-length')) {
+        try {
+            const length = await getLegacyFormDataLength(options.body)
+            if (Number.isFinite(length)) {
+                headers.set('content-length', String(length))
+            }
+        } catch (_error) {
+            // Unknown multipart length is acceptable: fetch can use chunked transfer encoding.
+        }
+    }
+
+    const stream = new PassThrough()
+    options.body.pipe(stream)
+
+    return {
+        ...options,
+        headers,
+        body: stream,
+        duplex: options.duplex || 'half',
+    }
 }
 
 function hasAuthorizationHeader(headers) {
@@ -245,10 +321,11 @@ async function fetchFollowingRedirects(fetchImpl, url, options, signal, config) 
 
 async function fetchWithRetry(url, options = {}, config = {}) {
     const fetchImpl = config.fetchImpl || globalThis.fetch
-    const maxRetries = normalizePositiveInteger(config.maxRetries, 5)
+    const requestedMaxRetries = normalizePositiveInteger(config.maxRetries, 5)
     const timeoutMs = normalizePositiveInteger(config.timeoutMs, 10_000)
     const retryDelayMs = normalizePositiveInteger(config.retryDelayMs, 1_000)
     const retryOnStatuses = Array.isArray(config.retryOnStatuses) ? config.retryOnStatuses : []
+    const maxRetries = isLegacyFormDataBody(options.body) ? 0 : requestedMaxRetries
 
     if (typeof fetchImpl !== 'function') {
         throw new TypeError('fetchWithRetry requires a valid fetch implementation')
@@ -269,9 +346,10 @@ async function fetchWithRetry(url, options = {}, config = {}) {
         attempts += 1
 
         try {
+            const preparedOptions = await prepareRequestOptions(options)
             const requestOptions = shouldHandleRedirectsManually
-                ? { ...options, redirect: 'manual' }
-                : options
+                ? { ...preparedOptions, redirect: 'manual' }
+                : preparedOptions
             const { response, finalUrl } = shouldHandleRedirectsManually
                 ? await fetchFollowingRedirects(fetchImpl, url, requestOptions, mergedSignal, config)
                 : {

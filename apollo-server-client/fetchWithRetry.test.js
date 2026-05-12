@@ -1,5 +1,6 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const FormData = require('form-data')
 
 const { FetchRetryError, fetchWithRetry } = require('./fetchWithRetry')
 
@@ -194,4 +195,48 @@ test('keeps Authorization header across same-origin redirects', async () => {
     assert.equal(fetchMock.calls[0].options.headers.Authorization, auth)
     assert.equal(fetchMock.calls[1].options.headers.Authorization, auth)
     assert.equal(fetchMock.calls[1].url, 'https://example.com/v2/resource')
+})
+
+test('sends legacy form-data body as multipart stream for undici fetch', async () => {
+    const form = new FormData()
+    form.append('operations', '{"query":"mutation"}')
+    form.append('map', '{"0":["variables.file"]}')
+    form.append('0', Buffer.from('hello'), 'file.txt')
+
+    const fetchMock = createMockFetch(async (_url, options) => {
+        assert.equal(options.duplex, 'half')
+
+        const contentType = options.headers instanceof Headers
+            ? options.headers.get('content-type')
+            : options.headers['content-type']
+        assert.match(contentType, /^multipart\/form-data; boundary=/)
+
+        const chunks = []
+        for await (const chunk of options.body) {
+            chunks.push(Buffer.from(chunk))
+        }
+        const payload = Buffer.concat(chunks).toString('utf8')
+        assert.match(payload, /name=\"operations\"/)
+        assert.match(payload, /name=\"map\"/)
+        assert.match(payload, /name=\"0\"; filename=\"file.txt\"/)
+        assert.match(payload, /hello/)
+
+        return okResponse(200)
+    })
+
+    const response = await fetchWithRetry('https://example.com/upload', {
+        method: 'POST',
+        headers: {
+            Authorization: 'Bearer token',
+        },
+        body: form,
+    }, {
+        fetchImpl: fetchMock,
+        timeoutMs: 50,
+        retryDelayMs: 1,
+        maxRetries: 5,
+    })
+
+    assert.equal(response.status, 200)
+    assert.equal(fetchMock.calls.length, 1)
 })
