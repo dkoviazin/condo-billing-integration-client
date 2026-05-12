@@ -74,20 +74,20 @@ If `-p` is omitted, current month start is used.
 ## Report example
 
 ```text
-LLC "Status Goroda" (6417001343)
-Context : 225f56fa-da88-49d2-a5ef-afg2e3060168
-Period : 2026-01-01
+ООО "Название организации" (ИНН)
+Контекст : ID-Контекста
+Период : 2026-01-01
 
-Receipts loaded (70) : 28.72 s
+Загружено квитанций (70) : 28.72 s
 
-Saving : 1.41 s
-Created : 0
-Updated : 0
-Errors : 0
-Unchanged : 70
+Сохранение : 1.41 s
+Новых : 0
+Обновлено : 0
+Ошибок : 0
+Не изменилось : 70
 
-PDF receipts : 2.36 s
-Unchanged : 70
+PDF квитанции : 2.36 s
+Не изменилось : 70
 ```
 
 ## Integration contract
@@ -113,11 +113,11 @@ class Integration {
 ## Minimal receipt shape
 
 A receipt must contain:
-- `accountNumber: string | number`
-- `address: string`
-- `tin: string | number`
-- `bankAccount: string | number`
-- `routingNumber: string | number`
+- `accountNumber: string | number` // Л/С
+- `address: string`                // Адрес вместе с помещением
+- `tin: string | number`           // ИНН
+- `bankAccount: string | number`   // Р/С
+- `routingNumber: string | number` // БИК
 - `year: number`
 - `month: number`
 - `toPay: number | string`
@@ -144,39 +144,6 @@ Watch mode:
 ```bash
 npm run test:watch
 ```
-
-## Refactoring and test roadmap
-
-### Phase 1. Baseline tests
-
-1. Keep all tests on native Node tools only.
-2. Cover retry, timeout and abort scenarios in `fetchWithRetry`.
-3. Add redirect + Basic auth regression tests.
-
-### Phase 2. Sync decomposition
-
-1. Split `Sync` into focused parts:
-   - argument parser
-   - sync orchestrator
-   - report builder/notifier
-2. Inject dependencies for testability (CONDO client, notifier, clock).
-3. Add unit tests for period fallback and error handling.
-
-### Phase 3. Mapping and validation
-
-1. Extract receipt mapping from `CondoBilling` into a dedicated mapper.
-2. Add receipt validation (required fields and types).
-3. Add tests for money conversion and mapping edge cases.
-
-### Phase 4. Integration helpers
-
-1. Analyze multiple real integrations and extract shared helpers.
-2. Start with reusable helpers for:
-   - pagination
-   - Basic/Bearer auth clients
-   - period filtering
-   - receipt shaping utilities
-3. Add helper-level tests and contract tests.
 
 ## License
 
