@@ -1,11 +1,8 @@
-const crypto = require('crypto')
 const { ApolloServerClient } = require('../apollo-server-client')
 const Big = require('big.js')
-const { get, isEmpty, chunk} = require('lodash')
+const { get, chunk} = require('lodash')
 const {
     PDF_CREATE_MESSAGE,
-    PDF_UPDATE_MESSAGE,
-    PDF_SKIPP_MESSAGE,
     PDF_ERROR_MESSAGE,
     LOG_CONDO_UPDATED_RECEIPTS_COUNT_MESSAGE,
     LOG_CONDO_CREATED_RECEIPTS_COUNT_MESSAGE,
@@ -17,6 +14,7 @@ const dayjs = require('dayjs')
 const {
     BillingReceiptFile: FileGql,
     BillingContext: ContextGql,
+    BillingReceipt: BillingReceiptGql,
     BillingRecipient,
     REGISTER_BILLING_RECEIPTS_MUTATION,
     REGISTER_BILLING_RECEIPT_FILE_MUTATION,
@@ -24,8 +22,6 @@ const {
 const {
     CONDO_SAVE_CHUNK_SIZE,
 } = require('../constants')
-
-const createHash = (input) => crypto.createHash('md5').update(input).digest('hex')
 
 class CondoBilling extends ApolloServerClient {
 
@@ -45,38 +41,48 @@ class CondoBilling extends ApolloServerClient {
         })
     }
 
-    async saveBillingReceiptFile (contextId, pdfBuffer, receipt) {
-        if (!pdfBuffer) {
-            return PDF_ERROR_MESSAGE
+    async checkForFileExistence (contextId, importId) {
+        const [receipt] = await this.getModels({
+            modelGql: BillingReceiptGql,
+            where: {
+                context: { id: contextId },
+                importId,
+            }
+        })
+        if (!receipt) {
+            return false
         }
         const [existing] = await this.getModels({
             modelGql: FileGql,
             where: {
-                importId: String(receipt.importId),
+                receipt: { id: receipt.id },
                 context: { id: contextId },
             }
         })
-        const base64EncodedPDF = Buffer.from(pdfBuffer).toString('base64')
-        const controlSum = createHash(base64EncodedPDF)
-        if (!existing || existing.controlSum !== controlSum) {
-            try {
-                await this.client.mutate({
-                    mutation: REGISTER_BILLING_RECEIPT_FILE_MUTATION,
-                    variables: {
-                        data: {
-                            ...this.dvSender(),
-                            context: { id: contextId },
-                            receipt: { importId: String(receipt.importId) },
-                            base64EncodedPDF,
-                        },
-                    },
-                })
-                return !existing ? PDF_CREATE_MESSAGE : PDF_UPDATE_MESSAGE
-            } catch (error) {
-                return PDF_ERROR_MESSAGE
-            }
+        return !!existing
+    }
+
+    async saveBillingReceiptFile (contextId, pdfBuffer, receipt) {
+        if (!pdfBuffer) {
+            return PDF_ERROR_MESSAGE
         }
-        return PDF_SKIPP_MESSAGE
+        const base64EncodedPDF = Buffer.from(pdfBuffer).toString('base64')
+        try {
+            await this.client.mutate({
+                mutation: REGISTER_BILLING_RECEIPT_FILE_MUTATION,
+                variables: {
+                    data: {
+                        ...this.dvSender(),
+                        context: { id: contextId },
+                        receipt: { importId: String(receipt.importId) },
+                        base64EncodedPDF,
+                    },
+                },
+            })
+            return PDF_CREATE_MESSAGE
+        } catch (error) {
+            return PDF_ERROR_MESSAGE
+        }
     }
 
     toMoney (value) {

@@ -12,6 +12,7 @@ const {
     LOG_CONDO_SAVE_MESSAGE,
     NOT_IMPLEMENTED_ERROR,
     FAILED_TO_GET_RECEIPTS_ERROR,
+    PDF_SKIPP_MESSAGE,
 } = require('./constants')
 
 const { CondoBilling } = require('./integration/condoBilling')
@@ -82,11 +83,17 @@ class Sync {
         progress.start(withFiles.length)
         const pdfResult = {}
         for (const receipt of withFiles) {
-            const pdfBuffer = await this.integration.getPDFBuffer(receipt)
-            const receiptResult = await this.condo.saveBillingReceiptFile(this.contextId, pdfBuffer, receipt)
-            pdfResult[receiptResult] ||= 0
             progress.increment(1)
-            pdfResult[receiptResult]++
+            const isFileExisting = await this.condo.checkForFileExistence(this.contextId, receipt.importId)
+            if (!isFileExisting) {
+                const pdfBuffer = await this.integration.getPDFBuffer(receipt)
+                const receiptResult = await this.condo.saveBillingReceiptFile(this.contextId, pdfBuffer, receipt)
+                pdfResult[receiptResult] ||= 0
+                pdfResult[receiptResult]++
+            } else {
+                pdfResult[PDF_SKIPP_MESSAGE] ||= 0
+                pdfResult[PDF_SKIPP_MESSAGE]++
+            }
         }
         progress.stop()
         time = logger.stopTimer()
