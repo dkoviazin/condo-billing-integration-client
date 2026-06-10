@@ -66,6 +66,43 @@ class CondoBilling extends ApolloServerClient {
         if (!pdfBuffer) {
             return PDF_ERROR_MESSAGE
         }
+
+        const { importId, accountNumber, year, month } = receipt
+
+        try {
+            const [receiptCondo] = await this.getModels({
+                modelGql: BillingReceiptGql,
+                where: {
+                    context: { id: contextId },
+                    importId: String(importId),
+                }
+            })
+            if (!receiptCondo) {
+                return PDF_ERROR_MESSAGE
+            }
+            await this.createModel({
+                modelGql: FileGql,
+                createInput: {
+                    importId: String(importId),
+                    context: { connect: { id: contextId } },
+                    receipt: { connect: { id: receiptCondo.id } },
+                    sensitiveDataFile: this.createUploadFile({
+                        buffer: pdfBuffer,
+                        filename: [accountNumber, year, month].join('_') + '.pdf',
+                        mimetype: 'application/pdf',
+                    })
+                }
+            })
+            return PDF_CREATE_MESSAGE
+        } catch (error) {
+            return PDF_ERROR_MESSAGE
+        }
+    }
+
+    async saveBillingReceiptFileAsString (contextId, pdfBuffer, receipt) {
+        if (!pdfBuffer) {
+            return PDF_ERROR_MESSAGE
+        }
         const base64EncodedPDF = Buffer.from(pdfBuffer).toString('base64')
         try {
             await this.client.mutate({
