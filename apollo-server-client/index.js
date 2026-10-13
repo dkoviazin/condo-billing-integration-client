@@ -94,8 +94,41 @@ function getSetCookie (headers) {
     return singleCookie ? [singleCookie] : []
 }
 
+/**
+ * A compact description of a model used to generate GraphQL operations.
+ *
+ * @typedef {Object} ModelGqlDescriptor
+ * @property {string} name GraphQL model name, for example `BillingReceipt`.
+ * @property {string} fields GraphQL selection set, for example `{ id amount }`.
+ */
+
+/**
+ * Result of `generateGqlQueries`.
+ *
+ * @typedef {Object} GeneratedModelGql
+ * @property {string} SINGULAR_FORM
+ * @property {string} PLURAL_FORM
+ * @property {string} MODEL_FIELDS
+ * @property {import('graphql').DocumentNode} GET_ALL_OBJS_QUERY
+ * @property {import('graphql').DocumentNode} GET_COUNT_OBJS_QUERY
+ * @property {import('graphql').DocumentNode} GET_ALL_OBJS_WITH_COUNT_QUERY
+ * @property {import('graphql').DocumentNode} CREATE_OBJ_MUTATION
+ * @property {import('graphql').DocumentNode} CREATE_OBJS_MUTATION
+ * @property {import('graphql').DocumentNode} UPDATE_OBJ_MUTATION
+ * @property {import('graphql').DocumentNode} UPDATE_OBJS_MUTATION
+ * @property {import('graphql').DocumentNode} DELETE_OBJ_MUTATION
+ * @property {import('graphql').DocumentNode} DELETE_OBJS_MUTATION
+ */
+
+/**
+ * Both the descriptor form and the object returned by `generateGqlQueries` are supported.
+ *
+ * @typedef {ModelGqlDescriptor|GeneratedModelGql} ModelGql
+ */
+
 class ApolloServerClient {
     #isAuthorized = false
+    #modelGqlCache = new Map()
     client
     clientName
     authToken
@@ -106,11 +139,16 @@ class ApolloServerClient {
     logger
 
     /**
-     *
-     * @param endpoint - https://condo.d.doma.ai/admin/api
-     * @param authRequisites - can be { identity: 'service-user@doma.ai', secret: 'password' } or { phone: '+7911....', password: '' }
-     * @param clientName - logger name
-     * @param locale - for server side translated texts
+     * @param {string} endpoint GraphQL endpoint.
+     * @param {Object} [authRequisites]
+     * @param {string} [authRequisites.identity] Email/identity for password authentication.
+     * @param {string} [authRequisites.secret] Password for identity authentication.
+     * @param {string} [authRequisites.phone] Phone for phone authentication.
+     * @param {string} [authRequisites.password] Password for phone authentication.
+     * @param {string} [authRequisites.token] Existing authentication token.
+     * @param {Object} [options]
+     * @param {string} [options.clientName='apollo-server-client'] Logger fingerprint.
+     * @param {string} [options.locale='ru'] Server-side locale.
      */
     constructor (endpoint, authRequisites = {}, { clientName = 'apollo-server-client', locale = 'ru' } = {}) {
         this.clientName = clientName
@@ -139,6 +177,44 @@ class ApolloServerClient {
                 },
             },
         })
+    }
+
+    #resolveModelGql (modelGql) {
+        if (modelGql === null || typeof modelGql !== 'object') {
+            throw new TypeError('modelGql must be a generated GraphQL model or a descriptor { name, fields }')
+        }
+
+        const hasName = Object.hasOwn(modelGql, 'name')
+        const hasFields = Object.hasOwn(modelGql, 'fields')
+
+        if (!hasName && !hasFields) {
+            const requiredQueries = [
+                'GET_ALL_OBJS_QUERY',
+                'GET_COUNT_OBJS_QUERY',
+                'CREATE_OBJ_MUTATION',
+                'UPDATE_OBJ_MUTATION',
+                'CREATE_OBJS_MUTATION',
+                'UPDATE_OBJS_MUTATION',
+            ]
+            if (!requiredQueries.every(queryName => modelGql[queryName])) {
+                throw new TypeError('modelGql must contain generated GraphQL queries')
+            }
+            return modelGql
+        }
+
+        if (!hasName || !hasFields || typeof modelGql.name !== 'string' || typeof modelGql.fields !== 'string') {
+            throw new TypeError('modelGql descriptor must contain string properties name and fields')
+        }
+
+        const name = modelGql.name.trim()
+        const fields = modelGql.fields.trim()
+        const cacheKey = `${name}\u0000${fields}`
+
+        if (!this.#modelGqlCache.has(cacheKey)) {
+            this.#modelGqlCache.set(cacheKey, generateGqlQueries(name, fields))
+        }
+
+        return this.#modelGqlCache.get(cacheKey)
     }
 
     async signIn () {
@@ -251,31 +327,75 @@ class ApolloServerClient {
         }
     }
 
+    /**
+     * Loads all matching objects by several requests.
+     *
+     * @param {Object} options
+     * @param {ModelGql} options.modelGql Model descriptor or generated GraphQL object.
+     * @param {Object} [options.where] GraphQL `where` filter.
+     * @param {number} [options.chunkSize=LOAD_CHUNK_SIZE] Number of objects per request.
+     * @param {number} [options.limit=100000] Maximum number of objects to load.
+     * @param {string[]} [options.sortBy=['id_ASC']] Sorting rules.
+     * @returns {Promise<Object[]>}
+     *
+     * @example
+     * const receipts = await client.loadByChunks({
+     *     modelGql: { name: 'BillingReceipt', fields: '{ id toPay }' },
+     *     where: { account: { id: { eq: accountId } } },
+     * })
+     */
     async loadByChunks ({ modelGql, where, chunkSize = LOAD_CHUNK_SIZE, limit = 100000, sortBy = ['id_ASC'] }) {
+        if (!Number.isInteger(chunkSize) || chunkSize <= 0) {
+            throw new RangeError('chunkSize must be a positive integer')
+        }
+
+        if (!Number.isInteger(limit) || limit < 0) {
+            throw new RangeError('limit must be a non-negative integer')
+        }
+
         let skip = 0
-        let maxIterationsCount = Math.ceil(limit / chunkSize)
-        let newChunk = []
-        let all = []
-        do {
-            newChunk = await this.getModels({ modelGql, where, sortBy, first: chunkSize, skip: skip })
-            all = all.concat(newChunk)
-            skip += newChunk.length
-        } while (--maxIterationsCount > 0 && newChunk.length)
+        const all = []
+
+        while (all.length < limit) {
+            const first = Math.min(chunkSize, limit - all.length)
+            const chunk = await this.getModels({ modelGql, where, sortBy, first, skip })
+
+            if (!chunk.length) {
+                break
+            }
+
+            all.push(...chunk)
+            skip += chunk.length
+
+            if (chunk.length < first) {
+                break
+            }
+        }
+
         return all
     }
 
     /**
-     * Counts objs for request
-     * @param modelGql
-     * @param where
-     * @param first
-     * @param skip
-     * @param sortBy
-     * @returns {Promise<*>}
+     * Counts objects matching a filter.
+     *
+     * @param {Object} options
+     * @param {ModelGql} options.modelGql Model descriptor or generated GraphQL object.
+     * @param {Object} [options.where] GraphQL `where` filter.
+     * @param {number} [options.first] Optional pagination argument accepted by the API.
+     * @param {number} [options.skip] Optional pagination argument accepted by the API.
+     * @param {string[]} [options.sortBy] Optional sorting rules.
+     * @returns {Promise<number>}
+     *
+     * @example
+     * const count = await client.getCount({
+     *     modelGql: { name: 'BillingReceipt', fields: '{ id }' },
+     *     where: { account: { id: { eq: accountId } } },
+     * })
      */
     async getCount ({ modelGql, where, first, skip, sortBy }) {
+        const queries = this.#resolveModelGql(modelGql)
         const { data: { meta: { count } } } = await this.executeAuthorizedQuery({
-            query: modelGql.GET_COUNT_OBJS_QUERY,
+            query: queries.GET_COUNT_OBJS_QUERY,
             variables: {
                 where,
                 first,
@@ -287,11 +407,28 @@ class ApolloServerClient {
     }
 
     /**
-     * Default limit is 100 (on condo side). To load all models - use loadByChunks
+     * Loads one page of objects. The API default page size is 100.
+     * Use `loadByChunks` when all matching objects are required.
+     *
+     * @param {Object} options
+     * @param {ModelGql} options.modelGql Model descriptor or generated GraphQL object.
+     * @param {Object} [options.where] GraphQL `where` filter.
+     * @param {number} [options.first] Page size.
+     * @param {number} [options.skip] Number of objects to skip.
+     * @param {string[]} [options.sortBy] Sorting rules.
+     * @returns {Promise<Object[]>}
+     *
+     * @example
+     * const receipts = await client.getModels({
+     *     modelGql: { name: 'BillingReceipt', fields: '{ id amount }' },
+     *     first: 50,
+     *     sortBy: ['createdAt_DESC'],
+     * })
      */
     async getModels ({ modelGql, where, first, skip, sortBy }) {
+        const queries = this.#resolveModelGql(modelGql)
         const { data: { objs } } = await this.executeAuthorizedQuery({
-            query: modelGql.GET_ALL_OBJS_QUERY,
+            query: queries.GET_ALL_OBJS_QUERY,
             variables: {
                 where,
                 first,
@@ -302,25 +439,53 @@ class ApolloServerClient {
         return objs
     }
 
+    /**
+     * Updates one object.
+     *
+     * @param {Object} options
+     * @param {ModelGql} options.modelGql Model descriptor or generated GraphQL object.
+     * @param {string} [options.id] Object identifier.
+     * @param {Object} options.updateInput Fields accepted by the model update input.
+     * @returns {Promise<Object>}
+     *
+     * @example
+     * const receipt = await client.updateModel({
+     *     modelGql: { name: 'BillingReceipt', fields: '{ id status }' },
+     *     id: receiptId,
+     *     updateInput: { status: 'PAID' },
+     * })
+     */
     async updateModel ({ modelGql, id = null, updateInput }) {
+        const queries = this.#resolveModelGql(modelGql)
         const variables = { data: { ...this.dvSender(), ...updateInput } }
 
         if (id) variables.id = id
 
         const { data: { obj: updatedObj, result: updatedResult } } = await this.executeAuthorizedMutation({
-            mutation: modelGql.UPDATE_OBJ_MUTATION,
+            mutation: queries.UPDATE_OBJ_MUTATION,
             variables,
         })
 
         return updatedObj || updatedResult
     }
 
+    /**
+     * Updates multiple objects in chunks.
+     *
+     * @param {Object} options
+     * @param {ModelGql} options.modelGql Model descriptor or generated GraphQL object.
+     * @param {Object[]} [options.updateInputs=[]] Items in `{ id, data }` format.
+     * @param {boolean} [options.isBatch=false] Use the batch GraphQL client.
+     * @param {(processed: number) => (void|Promise<void>)} [options.onProgress]
+     * @returns {Promise<Object[]>}
+     */
     async updateModels ({ modelGql, updateInputs = [], isBatch = false, onProgress = () => null }) {
+        const queries = this.#resolveModelGql(modelGql)
         const chunks = splitArray(updateInputs, MAX_MODIFY_OPERATIONS_IN_REQUEST)
         let result = []
         for (const chunk of chunks) {
             const { data: { objs } } = await this.executeAuthorizedMutation({
-                mutation: modelGql.UPDATE_OBJS_MUTATION,
+                mutation: queries.UPDATE_OBJS_MUTATION,
                 variables: {
                     data: chunk.map(data => ({ id: data.id, data: { ...this.dvSender(), ...data.data } })),
                 },
@@ -332,9 +497,25 @@ class ApolloServerClient {
         return result
     }
 
+    /**
+     * Creates one object.
+     *
+     * @param {Object} options
+     * @param {ModelGql} options.modelGql Model descriptor or generated GraphQL object.
+     * @param {Object} options.createInput Fields accepted by the model create input.
+     * @param {boolean} [options.isBatch=false] Use the batch GraphQL client.
+     * @returns {Promise<Object>}
+     *
+     * @example
+     * const receipt = await client.createModel({
+     *     modelGql: { name: 'BillingReceipt', fields: '{ id accountNumber }' },
+     *     createInput: { accountNumber, amount: 1250 },
+     * })
+     */
     async createModel ({ modelGql, createInput, isBatch = false }) {
+        const queries = this.#resolveModelGql(modelGql)
         const { data: { obj } } = await this.executeAuthorizedMutation({
-            mutation: modelGql.CREATE_OBJ_MUTATION,
+            mutation: queries.CREATE_OBJ_MUTATION,
             variables: {
                 data: {
                     ...this.dvSender(),
@@ -345,12 +526,23 @@ class ApolloServerClient {
         return obj
     }
 
+    /**
+     * Creates multiple objects in chunks.
+     *
+     * @param {Object} options
+     * @param {ModelGql} options.modelGql Model descriptor or generated GraphQL object.
+     * @param {Object[]} [options.createInputs=[]] Objects to create.
+     * @param {boolean} [options.isBatch=false] Use the batch GraphQL client.
+     * @param {(processed: number) => (void|Promise<void>)} [options.onProgress]
+     * @returns {Promise<Object[]>}
+     */
     async createModels ({ modelGql, createInputs = [], isBatch = false, onProgress = () => null }) {
+        const queries = this.#resolveModelGql(modelGql)
         const chunks = splitArray(createInputs, MAX_MODIFY_OPERATIONS_IN_REQUEST)
         let result = []
         for (const chunk of chunks) {
             const { data: { objs } } = await this.executeAuthorizedMutation({
-                mutation: modelGql.CREATE_OBJS_MUTATION,
+                mutation: queries.CREATE_OBJS_MUTATION,
                 variables: {
                     data: chunk.map(data => ({ data: { ...this.dvSender(), ...data } })),
                 },
@@ -453,6 +645,7 @@ function bufferToStream (content) {
     tmp.push(null)
     return tmp
 }
+
 async function stream2buffer (stream) {
     const chunks = [];
     for await (const chunk of stream) {

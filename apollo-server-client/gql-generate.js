@@ -2,6 +2,8 @@ const pluralize = require('pluralize')
 const { gql } = require('graphql-tag')
 
 const DEFAULT_PAGE_SIZE = 100
+// Condo model/table names use PascalCase and contain Latin letters only.
+const MODEL_NAME_PATTERN = /^[A-Z][A-Za-z]*$/
 
 function getModelForms (key) {
     const MODEL = pluralize.singular(key)
@@ -91,11 +93,39 @@ function genDeleteMany (key, fields) {
     `
 }
 
+/**
+ * Generates all standard GraphQL operations for a Condo model.
+ *
+ * @param {string} key Singular or plural GraphQL model name.
+ * @param {string} fields GraphQL selection set, for example `{ id name }`.
+ * @returns {Object} Generated queries and mutations.
+ *
+ * @example
+ * const BillingReceiptGql = generateGqlQueries(
+ *     'BillingReceipt',
+ *     '{ id accountNumber amount }',
+ * )
+ */
 function generateGqlQueries (key, fields) {
+    if (typeof key !== 'string' || !MODEL_NAME_PATTERN.test(key.trim())) {
+        throw new TypeError('model name must be a valid GraphQL name')
+    }
+    if (typeof fields !== 'string' || !fields.trim()) {
+        throw new TypeError('model fields must be a non-empty GraphQL selection set')
+    }
+
+    key = key.trim()
+    fields = fields.trim()
     const [singularName, pluralName] = getModelForms(key)
 
     if (!fields.startsWith('{') || !fields.endsWith('}'))
         throw new Error('wrong list fields format. Try "{ name1 name2 }"')
+
+    try {
+        gql`query validateModelFields { __typename ${fields} }`
+    } catch (error) {
+        throw new Error(`wrong model fields selection set: ${error.message}`, { cause: error })
+    }
 
     const GET_ALL_OBJS_QUERY = genGetAllGQL(singularName, fields)
     const GET_COUNT_OBJS_QUERY = genGetCountGQL(singularName)
