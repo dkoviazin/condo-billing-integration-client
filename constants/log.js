@@ -8,6 +8,7 @@ const RU_MESSAGES = {
     LOG_CONDO_CREATED_RECEIPTS_COUNT_MESSAGE: 'Добавлено',
     LOG_CONDO_UNTOUCHED_RECEIPTS_COUNT_MESSAGE: 'Не изменились',
     LOG_CONDO_ERROR_RECEIPTS_COUNT_MESSAGE: 'Ошибок',
+    LOG_SKIP_DEVELOPERS_RECEIPTS_COUNT_MESSAGE: 'Застройщик(пропущено):',
     PDF_CREATE_MESSAGE: 'Новых',
     PDF_UPDATE_MESSAGE: 'Обновлено',
     PDF_SKIPP_MESSAGE: 'Без изменений',

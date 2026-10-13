@@ -43,11 +43,16 @@ class Sync {
         this.syncPeriodBefore = syncPeriodBefore
         this.period = period
         this.organization = {}
+        this.skippedAccountsNumbers = new Set()
     }
 
     async getReceiptsFromIntegration () {
         try {
-            return await this.integration.getAllReceipts({ tin: this.organization.tin, period: this.period })
+            let { receipts } = await this.integration.getAllReceipts({ tin: this.organization.tin, period: this.period })
+            if (this.skippedAccountsNumbers.size > 0) {
+                receipts = receipts.filter(({ accountNumber }) => !this.skippedAccountsNumbers.has(accountNumber))
+            }
+            return { receipts }
         } catch (error) {
             return { error }
         }
@@ -73,7 +78,7 @@ class Sync {
             await logger.notify()
             return 0
         }
-        const result = await this.condo.saveReceipts(this.contextId, receipts, this.period)
+        const result = await this.condo.saveReceipts(this.contextId, receipts, this.skippedAccountsNumbers.size)
         time = logger.stopTimer()
         logger.addLog(LOG_CONDO_SAVE_MESSAGE, time)
         Object.entries(result).filter(([, value]) => value).forEach(([name, value]) => logger.addLog(name, value))
@@ -121,6 +126,19 @@ class Sync {
         const recipients = await this.condo.getBillingRecipients({
             context: { id },
         })
+        let excludeAccountNumbers = []
+        if (settings?.skipDevelopers?.length > 0) {
+            const excludeAccounts = await this.condo.loadByChunks({
+                modelGql: {
+                    name: 'BillingAccount',
+                    fields: '{ id number }',
+                },
+                where: {
+                    fullName_in: settings.skipDevelopers,
+                }
+            })
+            this.skippedAccountsNumbers = new Set(excludeAccounts.map(({ number }) => number))
+        }
         this.integration.setCondoSettings({ settings, recipients })
         this.organization = { name, tin }
     }

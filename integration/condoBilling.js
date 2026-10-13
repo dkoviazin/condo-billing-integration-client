@@ -7,6 +7,7 @@ const {
     LOG_CONDO_UPDATED_RECEIPTS_COUNT_MESSAGE,
     LOG_CONDO_CREATED_RECEIPTS_COUNT_MESSAGE,
     LOG_CONDO_ERROR_RECEIPTS_COUNT_MESSAGE,
+    LOG_SKIP_DEVELOPERS_RECEIPTS_COUNT_MESSAGE,
     LOG_CONDO_UNTOUCHED_RECEIPTS_COUNT_MESSAGE,
 } = require('../constants')
 const dayjs = require('dayjs')
@@ -168,7 +169,7 @@ class CondoBilling extends ApolloServerClient {
         }
     }
 
-    async saveReceipts (contextId, receipts = []) {
+    async saveReceipts (contextId, receipts = [], skipped = 0) {
         const receiptWithTypes = receipts.map(this.setTypesToReceipt.bind(this))
         const chunks = chunk(receiptWithTypes, CONDO_SAVE_CHUNK_SIZE)
         const result = {
@@ -176,6 +177,7 @@ class CondoBilling extends ApolloServerClient {
             [LOG_CONDO_UPDATED_RECEIPTS_COUNT_MESSAGE]: 0,
             [LOG_CONDO_ERROR_RECEIPTS_COUNT_MESSAGE]: 0,
             [LOG_CONDO_UNTOUCHED_RECEIPTS_COUNT_MESSAGE]: 0,
+            [LOG_SKIP_DEVELOPERS_RECEIPTS_COUNT_MESSAGE]: skipped,
         }
         for (const chunk of chunks) {
            try {
