@@ -123,10 +123,10 @@ class Sync {
         if (!id) {
             throw new Error(`Billing context id is empty: ${this.contextId}`)
         }
-        const recipients = await this.condo.getBillingRecipients({
-            context: { id },
-        })
-        let excludeAccountNumbers = []
+        const recipients = await this.condo.getBillingRecipients({ context: { id } })
+        if (settings?.stopSync) {
+            return { error: 'skip sync' }
+        }
         if (settings?.skipDevelopers?.length > 0) {
             const excludeAccounts = await this.condo.loadByChunks({
                 modelGql: {
@@ -141,10 +141,15 @@ class Sync {
         }
         this.integration.setCondoSettings({ settings, recipients })
         this.organization = { name, tin }
+        return { status: 'success', error: null }
     }
 
     async run (){
-        await this.init()
+        const initStatus = await this.init()
+        if (initStatus.error) {
+            console.log(initStatus)
+            return
+        }
         try {
             let receiptsCount = await this.sync()
             if (receiptsCount === 0 && this.syncPeriodBefore) {
